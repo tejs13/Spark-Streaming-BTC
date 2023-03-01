@@ -61,6 +61,9 @@ def on_open(ws):
 
 
 if __name__ == "__main__":
+
+
+
     websocket.enableTrace(True)
 
 
