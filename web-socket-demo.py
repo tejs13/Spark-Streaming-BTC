@@ -33,7 +33,7 @@ def on_message(ws, message):
     cnt += 1
     # send_transactions(tx)
     try:
-        producer.send('bitcoin', str.encode(message))
+        producer.send('bitcoin-1', str.encode(message))
     except Exception as e:
         print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
         producer.flush()

@@ -89,6 +89,30 @@ def spark_start_job(conn=None):
         .schema(schema) \
         .json("BTC_TRANSACTIONS")
 
+    df = df.select('*', "x.*")
+    df = df.withColumn("inputs", explode('inputs')).withColumn("out", explode('out'))
+    df = df.select("op", "hash","lock_time", "ver", "size",
+                   "time", "tx_index", "vin_sz", "vout_sz", "relayed_by",
+
+                   col("inputs.sequence").alias("inputs.sequence"),
+                   col("inputs.prev_out.spent").alias('in_spent'),
+                   col("inputs.prev_out.tx_index").alias('in_tx_index'),
+                   col("inputs.prev_out.type").alias('in_type'),
+                   col("inputs.prev_out.addr").alias('in_addr'),
+                   col("inputs.prev_out.value").alias('in_value'),
+                   col("inputs.prev_out.n").alias('in_n'),
+                   col("inputs.prev_out.script").alias('in_script'),
+                   col("inputs.script").alias("inputs.script"),
+
+                   col("out.spent").alias("out_spent"),
+                   col("out.tx_index").alias("out_tx_index"),
+                   col("out.type").alias("out_type"),
+                   col("out.addr").alias("out_addr"),
+                   col("out.value").alias("out_value"),
+                   col("out.n").alias("out_n"),
+                   col("out.script").alias("out_script"),
+                   )
+    df = df.withColumn("out_value", col("out_value")/100000000)
 
 
     def process_each_batch(df, batch_id):
@@ -104,7 +128,7 @@ def spark_start_job(conn=None):
 
         print(df, "Finally", "========================", cnt, type(df))
 
-
+        df.show()
         print(df.show())
 
         df.toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
