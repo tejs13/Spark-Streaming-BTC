@@ -1,15 +1,16 @@
+import json
 import os
 import traceback
 import pandas
 
 import findspark
+import requests
 import websocket
 from websocket import create_connection
 
 findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
 
-
-from pyspark.python.pyspark.shell import sqlContext
+from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, explode
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DateType, ArrayType, \
@@ -19,8 +20,17 @@ KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 KAFKA_TOPIC = "bitcoin-1"
 
 import socket
+import random
 
+def send_data_to_flask(df):
+    print("SEND********************** CALLED")
+    d = df.to_dict(orient='records')
+    print(d, '==========', type(d))
+    url = 'http://localhost:5001/updateData'
+    t_d = {"vol": str(d[0]['sum(out_value)']), "mass": random.randint(0, 100)}
 
+    response = requests.post(url, json=json.loads(json.dumps(t_d)))
+    print(response.status_code, "-----------------")
 
 
 cnt = 0
@@ -47,7 +57,7 @@ def spark_start_job(conn=None):
     df = spark.readStream.format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("subscribe", KAFKA_TOPIC) \
-        .option("startingOffsets", "earliest") \
+        .option("startingOffsets", "latest") \
         .option("group_id", 'btc-group')\
         .load()
 
@@ -122,31 +132,29 @@ def spark_start_job(conn=None):
                    col("out.n").alias("out_n"),
                    col("out.script").alias("out_script"),
                    )
+    # Transformations and actions
     df = df.withColumn("out_value", col("out_value") / 100000000)
+    df = df.agg(F.sum(df['out_value']))
+
 
 
 
 
     def process_each_batch(df, batch_id):
         global cnt
-        # Collect the output of the stream into a Pandas dataframe
-        # output_df = df.toPandas()
-        # Print the output to the console
-        # server_socket.send(df)
 
-        # if listener connected then, sink the output
-        # if conn:
-        #     conn.send(b'tejas zalak')
+        df = df.toPandas()
 
+        send_data_to_flask(df)
         print(df,  "Finally", "========================", cnt, type(df))
         # print(df.show())
-        df.toPandas().to_excel('BTC_Transaction_LIVE.xlsx', sheet_name='Sheet1', index=True)
+        df.to_excel('BTC_Transaction_LIVE.xlsx', sheet_name='Sheet1', index=True)
 
         cnt += 1
 
     df.writeStream \
         .format("console") \
-        .outputMode("append") \
+        .outputMode("complete") \
         .foreachBatch(process_each_batch)\
         .start() \
         .awaitTermination()
@@ -158,7 +166,7 @@ if __name__ == '__main__':
 
     try:
         server_socket = socket.socket()
-        server_socket.bind(('localhost', 6666))
+        server_socket.bind(('localhost', 7777))
         # configure how many client the server can listen simultaneously
         # server_socket.listen(1)
         # print("Waiting for the CLient COnnection !!!!!!!!!!!!!!1")

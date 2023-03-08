@@ -8,8 +8,7 @@ from websocket import create_connection
 
 findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
 
-
-from pyspark.python.pyspark.shell import sqlContext
+from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, explode
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DateType, ArrayType, \
@@ -112,8 +111,9 @@ def spark_start_job(conn=None):
                    col("out.n").alias("out_n"),
                    col("out.script").alias("out_script"),
                    )
-    df = df.withColumn("out_value", col("out_value")/100000000)
-
+    # Transformations and actions
+    df = df.withColumn("out_value", col("out_value") / 100000000)
+    df = df.agg(F.sum(df['out_value']))
 
     def process_each_batch(df, batch_id):
         global cnt
@@ -122,16 +122,15 @@ def spark_start_job(conn=None):
         # Print the output to the console
         # server_socket.send(df)
 
-        # if listener connected then, sink the output
-        if conn:
-            conn.send(b'tejas zalak')
-
+        df = df.toPandas()
+        d = df.to_dict('records')
+        print(d, '==========', type(d))
         print(df, "Finally", "========================", cnt, type(df))
 
-        df.show()
-        print(df.show())
+        # df.show()
+        # print(df.show())
 
-        df.toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
+        df.to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
         # df.describe().toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
 
         cnt += 1
@@ -139,7 +138,7 @@ def spark_start_job(conn=None):
 
     df.writeStream \
         .format("console") \
-        .outputMode("append") \
+        .outputMode("complete") \
         .foreachBatch(process_each_batch)\
         .start() \
         .awaitTermination()
