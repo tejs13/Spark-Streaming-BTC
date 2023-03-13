@@ -10,7 +10,7 @@ findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
 
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, explode
+from pyspark.sql.functions import from_json, col, explode, window, from_unixtime
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DateType, ArrayType, \
     LongType
 
@@ -111,11 +111,30 @@ def spark_start_job(conn=None):
                    col("out.n").alias("out_n"),
                    col("out.script").alias("out_script"),
                    )
+
+
     # Transformations and actions
-    df = df.withColumn("out_value", col("out_value") / 100000000)
-    df = df.agg(F.sum(df['out_value']))
+    # all_cols_df = df.select("hash", "size", "vin_sz", "vout_sz", "in_addr", "in_value", "out_addr", "out_value")
+    windowedCounts = df.groupBy(window(from_unixtime(df['time']), "1 second"), df['hash'], df['in_addr'], df['out_addr'],
+                                df["in_value"], df["out_value"])\
+                                .agg(F.first(df['hash']))\
+                                .withWatermark("window", "1 second")
+
+    # windowedCounts = windowedCounts.agg(F.count(df['window']).alias("total_trans"))
+    windowedCounts = windowedCounts.select("window.start", "window.end", '*').drop('window')
+
+    df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
+        .withColumn("in_value", col("in_value") / 100000000)
+
+
+    # in_value_grouped = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df['time']).agg(F.first(df['hash']))
+    # out_value_grouped = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df['time']).agg(F.first(df['hash']))
+    # df = in_value_grouped.join(out_value_grouped, ['hash'])
+    # df = df.agg(F.sum(df['out_value']))
 
     def process_each_batch(df, batch_id):
+        # nonlocal all_cols_df
+
         global cnt
         # Collect the output of the stream into a Pandas dataframe
         # output_df = df.toPandas()
@@ -126,11 +145,12 @@ def spark_start_job(conn=None):
         d = df.to_dict('records')
         print(d, '==========', type(d))
         print(df, "Finally", "========================", cnt, type(df))
-
+        # print("ALLLLLLLLLLLLL COLSSSSSSSSSSSSSSS")
+        # print(all_cols_df)
         # df.show()
         # print(df.show())
 
-        df.to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
+        df.to_excel('BTC_Transaction_4.xlsx', sheet_name='Sheet1', index=True)
         # df.describe().toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
 
         cnt += 1
