@@ -8,21 +8,21 @@ import kafka.errors
 
 
 
-w_f = open('sample_btc_trans_3.txt', 'w')
+w_f = open('sample_btc_trans_4.txt', 'w')
 cnt = 0
 
 print('start of FILE *******************************')
 
-# while True:
-#     try:
-#         producer = KafkaProducer(bootstrap_servers='localhost:9092',api_version=(3, 2, 3))
-#         print("Connected to Kafka!")
-#         break
-#     except kafka.errors.NoBrokersAvailable as e:
-#         print(e)
-#         time.sleep(3)
-#
-#
+while True:
+    try:
+        producer = KafkaProducer(bootstrap_servers='localhost:9092',api_version=(3, 2, 3))
+        print("Connected to Kafka!")
+        break
+    except kafka.errors.NoBrokersAvailable as e:
+        print(e)
+        time.sleep(3)
+
+
 
 def on_message(ws, message):
     global cnt
@@ -30,11 +30,12 @@ def on_message(ws, message):
     # print(t)
     print("========================", cnt, type(message))
     w_f.write(json.dumps(tx))
+    w_f.write(",")
     cnt += 1
     # send_transactions(tx)
     try:
-        pass
-        # producer.send('bitcoin-1', str.encode(message))
+        # pass
+        producer.send('bitcoin-1', str.encode(message))
     except Exception as e:
         print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
         # producer.flush()

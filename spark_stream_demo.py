@@ -12,7 +12,7 @@ findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
 
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, explode
+from pyspark.sql.functions import from_json, col, explode, from_unixtime, window
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DateType, ArrayType, \
     LongType
 
@@ -133,9 +133,17 @@ def spark_start_job(conn=None):
                    col("out.script").alias("out_script"),
                    )
     # Transformations and actions
-    df = df.withColumn("out_value", col("out_value") / 100000000)
-    df = df.agg(F.sum(df['out_value']))
+    # all_cols_df = df.select("hash", "size", "vin_sz", "vout_sz", "in_addr", "in_value", "out_addr", "out_value")
+    windowedCounts = df.groupBy(window(from_unixtime(df['time']), "2 second"), df['hash'], df['in_addr'],
+                                df["in_value"],
+                                df['out_addr'], df["out_value"], df["size"]).count() \
+        .withWatermark("window", "1 second")
 
+    # windowedCounts = windowedCounts.agg(F.count(df['window']).alias("total_trans"))
+    df = windowedCounts.select("window.start", "window.end", '*')  # .drop('window')
+
+    # df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
+    #     .withColumn("in_value", col("in_value") / 100000000)
 
 
 
@@ -143,14 +151,35 @@ def spark_start_job(conn=None):
     def process_each_batch(df, batch_id):
         global cnt
 
-        df = df.toPandas()
+        ###################   IN_VALUE AND OUT_VALUE GROUPBY   #######################3
+        in_value_group = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df["size"]).agg(F.first(df['hash']))
+        out_value_group = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df["size"]).agg(F.first(df['hash']))
+        in_values = in_value_group.groupBy(col('hash'), col("size").alias("trans_size")).sum('in_value')
+        out_values = out_value_group.groupBy(col('hash'), col("size")).sum('out_value')
+        df = in_values.join(out_values, in_values['hash'] == out_values['hash'])
+        df = df.withColumn("trans_fees", F.col("sum(in_value)") - F.col("sum(out_value)"))
 
-        send_data_to_flask(df)
-        print(df,  "Finally", "========================", cnt, type(df))
+        df = df.withColumn("trans_fees_2", df["trans_fees"] / df["trans_size"])
+        df = df.withColumn("trans_fees_2", F.bround("trans_fees_2", 2))
+        df = df.filter(F.col("trans_fees_2") >= 0)
+
+        # taking out the average
+        # df = df.select(F.avg("trans_fees_2"))
+        df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+
+        df = df.toPandas()
+        d = df.to_dict('records')
+
+        # send to flask
+        # send_data_to_flask(d)
+
+
+        print(df, "Finally", "========================", cnt, type(df))
         # print(df.show())
         df.to_excel('BTC_Transaction_LIVE.xlsx', sheet_name='Sheet1', index=True)
-
         cnt += 1
+
+
 
     df.writeStream \
         .format("console") \

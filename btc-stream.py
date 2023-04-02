@@ -84,6 +84,7 @@ def spark_start_job(conn=None):
     # .option("multiLine", 'true') \
     df = spark.readStream \
         .option("maxFilesPerTrigger", 1) \
+        .option("multiline", "true") \
         .format('json')\
         .schema(schema) \
         .json("BTC_TRANSACTIONS")
@@ -115,8 +116,8 @@ def spark_start_job(conn=None):
 
     # Transformations and actions
     # all_cols_df = df.select("hash", "size", "vin_sz", "vout_sz", "in_addr", "in_value", "out_addr", "out_value")
-    windowedCounts = df.groupBy(window(from_unixtime(df['time']), "2 second"), df['hash'], df['in_addr'], df['out_addr'],
-                                df["in_value"], df["out_value"]).count() \
+    windowedCounts = df.groupBy(window(from_unixtime(df['time']), "2 second"), df['hash'], df['in_addr'], df["in_value"],
+                                df['out_addr'], df["out_value"], df["size"]).count() \
                                 .withWatermark("window", "1 second")
                                 # .agg(F.first(df['hash']))\
 
@@ -124,13 +125,14 @@ def spark_start_job(conn=None):
     # windowedCounts = windowedCounts.agg(F.count(df['window']).alias("total_trans"))
     windowedCounts = windowedCounts.select("window.start", "window.end", '*')     #.drop('window')
 
-    df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
-        .withColumn("in_value", col("in_value") / 100000000)
+    # df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
+    #     .withColumn("in_value", col("in_value") / 100000000)
 
+    df = windowedCounts
 
+    ###########
+    # df = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df['out_addr'], df['out_value']).agg(F.first(df['hash']))
 
-
-    # in_value_grouped = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df['time']).agg(F.first(df['hash']))
     # out_value_grouped = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df['time']).agg(F.first(df['hash']))
     # df = in_value_grouped.join(out_value_grouped, ['hash'])
     # df = df.agg(F.sum(df['out_value']))
@@ -143,10 +145,28 @@ def spark_start_job(conn=None):
         # output_df = df.toPandas()
         # Print the output to the console
         # server_socket.send(df)
-        backup_df = df.select(F.col('hash').alias('unique_hash'), F.col('in_addr').alias("input_addr"))
+        # backup_df = df.select(F.col('hash').alias('unique_hash'), F.col('in_addr').alias("input_addr"))
         # backup_df = backup_df.toDF()
-        df = df.join(backup_df, df['hash'] == backup_df['unique_hash'])
+        # df = df.join(backup_df, df['hash'] == backup_df['unique_hash'])
         # df = df.agg(F.sum_distinct(df['in_value']))
+
+        ###################   IN_VALUE AND OUT_VALUE GROUPBY   #######################3
+        in_value_group = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df["size"] ).agg(F.first(df['hash']))
+        out_value_group = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df["size"]).agg(F.first(df['hash']))
+        in_values = in_value_group.groupBy(col('hash'), col("size").alias("trans_size")).sum('in_value')
+        out_values = out_value_group.groupBy(col('hash'), col("size")).sum('out_value')
+        df = in_values.join(out_values, in_values['hash'] == out_values['hash'])
+        df = df.withColumn("trans_fees", F.col("sum(in_value)") - F.col("sum(out_value)"))
+
+        df = df.withColumn("trans_fees_2", df["trans_fees"] / df["trans_size"])
+        df = df.withColumn("trans_fees_2", F.bround("trans_fees_2", 2))
+        df = df.filter(F.col("trans_fees_2") >=0)
+
+        # taking out the average
+        # df = df.select(F.avg("trans_fees_2"))
+        df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+
+
         df = df.toPandas()
         d = df.to_dict('records')
         print(d, '==========', type(d))
@@ -156,7 +176,7 @@ def spark_start_job(conn=None):
         # df.show()
         # print(df.show())
 
-        df.to_excel('BTC_Transaction_5.xlsx', sheet_name='Sheet1', index=True)
+        df.to_excel('BTC_Transaction_6.xlsx', sheet_name='Sheet1', index=True)
         # df.describe().toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
 
         cnt += 1
