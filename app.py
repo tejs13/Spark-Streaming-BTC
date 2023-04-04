@@ -14,7 +14,7 @@ app = Flask(__name__)
 dataValues = []
 categoryValues = []
 
-BTC_DATA = {'vol':0, 'mass' : 0}
+BTC_DATA = {'vol':0, 'trans_fees':0, "total_hash":0}
 
 tags = {}
 
@@ -32,7 +32,10 @@ def refresh_data():
     global dataValues, categoryValues, BTC_DATA
     # print("labels now: " + str(dataValues))
     # print("data now: " + str(categoryValues))
-    d = {"vol": BTC_DATA['vol'], "mass": random.randint(0, 100)}
+    d = {"vol": BTC_DATA['vol'], "trans_fees": BTC_DATA['trans_fees'], "total_hash": BTC_DATA["total_hash"]}
+
+    # static to debug
+    # d = {"vol": 10023 ,"trans_fees": random.randint(10, 40)}
     return jsonify(data=d)
 
 
@@ -50,4 +53,5 @@ def update_data():
 
 
 if __name__ == "__main__":
+
     app.run(host='localhost', port=5001, debug=True)

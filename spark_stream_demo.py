@@ -22,15 +22,19 @@ KAFKA_TOPIC = "bitcoin-1"
 import socket
 import random
 
-def send_data_to_flask(df):
+def send_data_to_flask(d):
     print("SEND********************** CALLED")
-    d = df.to_dict(orient='records')
-    print(d, '==========', type(d))
     url = 'http://localhost:5001/updateData'
-    t_d = {"vol": str(d[0]['sum(out_value)']), "mass": random.randint(0, 100)}
+    t_d = {"vol": str(d[0]['sum(sum(out_value))']), "trans_fees": round(d[0]["avg(trans_fees_2)"], 4),
+           "total_hash": d[0]["total_hash"]}
+    print(t_d, "__________________________===================")
 
-    response = requests.post(url, json=json.loads(json.dumps(t_d)))
-    print(response.status_code, "-----------------")
+    try:
+        response = requests.post(url, json=json.loads(json.dumps(t_d)))
+        print(response.status_code, "-----------------")
+
+    except Exception as e:
+        pass
 
 
 cnt = 0
@@ -165,16 +169,20 @@ def spark_start_job(conn=None):
 
         # taking out the average
         # df = df.select(F.avg("trans_fees_2"))
-        df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+        # df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+        hash_cnt = df.count()
+        df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum'})
 
         df = df.toPandas()
         d = df.to_dict('records')
+        d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
+        d[0]["total_hash"] = hash_cnt
 
         # send to flask
-        # send_data_to_flask(d)
+        send_data_to_flask(d)
 
 
-        print(df, "Finally", "========================", cnt, type(df))
+        print(df, "Finally", "========================", cnt, type(df), hash_cnt)
         # print(df.show())
         df.to_excel('BTC_Transaction_LIVE.xlsx', sheet_name='Sheet1', index=True)
         cnt += 1

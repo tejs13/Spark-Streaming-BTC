@@ -158,17 +158,26 @@ def spark_start_job(conn=None):
         df = in_values.join(out_values, in_values['hash'] == out_values['hash'])
         df = df.withColumn("trans_fees", F.col("sum(in_value)") - F.col("sum(out_value)"))
 
+        # caculate satoshi per bytes
         df = df.withColumn("trans_fees_2", df["trans_fees"] / df["trans_size"])
         df = df.withColumn("trans_fees_2", F.bround("trans_fees_2", 2))
+
         df = df.filter(F.col("trans_fees_2") >=0)
+
+
 
         # taking out the average
         # df = df.select(F.avg("trans_fees_2"))
-        df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+        # df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+        df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum', 'trans_fees_2': 'count'})
 
 
         df = df.toPandas()
         d = df.to_dict('records')
+
+
+        d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
+
         print(d, '==========', type(d))
         print(df, "Finally", "========================", cnt, type(df))
         # print("ALLLLLLLLLLLLL COLSSSSSSSSSSSSSSS")
