@@ -169,23 +169,23 @@ def spark_start_job(conn=None):
         # taking out the average
         # df = df.select(F.avg("trans_fees_2"))
         # df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
-        df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum', 'trans_fees_2': 'count'})
+        # df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum', 'trans_fees_2': 'count'})
 
 
         df = df.toPandas()
-        d = df.to_dict('records')
+        # d = df.to_dict('records')
 
 
-        d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
+        # d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
 
-        print(d, '==========', type(d))
+        # print(d, '==========', type(d))
         print(df, "Finally", "========================", cnt, type(df))
         # print("ALLLLLLLLLLLLL COLSSSSSSSSSSSSSSS")
         # print(all_cols_df)
         # df.show()
         # print(df.show())
 
-        df.to_excel('BTC_Transaction_6.xlsx', sheet_name='Sheet1', index=True)
+        df.to_excel('BTC_Transaction_TRANING_DATSET.xlsx', sheet_name='Sheet1', index=True)
         # df.describe().toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
 
         cnt += 1

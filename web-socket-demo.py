@@ -9,8 +9,11 @@ import kafka.errors
 
 
 w_f = open('sample_btc_trans_4.txt', 'w')
-cnt = 0
 
+json_dataset_file = open('BTC_Dataset_April.json', 'w', encoding='utf-8')
+
+cnt = 0
+dataset = []
 print('start of FILE *******************************')
 
 while True:
@@ -29,17 +32,25 @@ def on_message(ws, message):
     tx = json.loads(message)
     # print(t)
     print("========================", cnt, type(message))
-    w_f.write(json.dumps(tx))
-    w_f.write(",")
+
+    # write to text file
+    # w_f.write(json.dumps(tx))
+    # w_f.write(",")
+
+    # write to json file
+    json.dump(tx, json_dataset_file, ensure_ascii=False, indent=4)
+    json_dataset_file.write(",")
     cnt += 1
+
+    # send BTC trnsaction to KAFKA, KAFKA active
     # send_transactions(tx)
-    try:
-        # pass
-        producer.send('bitcoin-1', str.encode(message))
-    except Exception as e:
-        print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
-        # producer.flush()
-        ws.close()
+    # try:
+    #     # pass
+    #     producer.send('bitcoin-1', str.encode(message))
+    # except Exception as e:
+    #     print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
+    #     # producer.flush()
+    #     ws.close()
 
 
 
@@ -79,6 +90,7 @@ if __name__ == "__main__":
         # Start the WebSocket connection
         ws.run_forever()
     finally:
+        # json.dump(dataset, json_dataset,  ensure_ascii=False, indent=4)
         pass
         # Close the producer after use
         # producer.flush(timeout=300)
