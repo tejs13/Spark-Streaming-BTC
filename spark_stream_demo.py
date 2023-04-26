@@ -10,6 +10,7 @@ from websocket import create_connection
 
 findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
 
+
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, explode, from_unixtime, window

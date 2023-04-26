@@ -87,7 +87,7 @@ def spark_start_job(conn=None):
         .option("multiline", "true") \
         .format('json')\
         .schema(schema) \
-        .json("BTC_TRANSACTIONS")
+        .json("BTC_TRANS_TEST")      # load the json files from this folder
 
     df = df.select('*', "x.*")
     df = df.withColumn("inputs", explode('inputs')).withColumn("out", explode('out'))
@@ -185,7 +185,7 @@ def spark_start_job(conn=None):
         # df.show()
         # print(df.show())
 
-        df.to_excel('BTC_Transaction_TRANING_DATSET.xlsx', sheet_name='Sheet1', index=True)
+        df.to_excel('BTC_1_TEST.xlsx', sheet_name='Sheet1', index=True)
         # df.describe().toPandas().to_excel('BTC_Transaction.xlsx', sheet_name='Sheet1', index=True)
 
         cnt += 1

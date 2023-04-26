@@ -10,7 +10,7 @@ import kafka.errors
 
 w_f = open('sample_btc_trans_4.txt', 'w')
 
-json_dataset_file = open('BTC_Dataset_April.json', 'w', encoding='utf-8')
+json_dataset_file = open('BTC_Dataset_April_2.json', 'w', encoding='utf-8')
 
 cnt = 0
 dataset = []
@@ -38,19 +38,19 @@ def on_message(ws, message):
     # w_f.write(",")
 
     # write to json file
-    json.dump(tx, json_dataset_file, ensure_ascii=False, indent=4)
-    json_dataset_file.write(",")
+    # json.dump(tx, json_dataset_file, ensure_ascii=False, indent=4)
+    # json_dataset_file.write(",")
     cnt += 1
 
     # send BTC trnsaction to KAFKA, KAFKA active
     # send_transactions(tx)
-    # try:
-    #     # pass
-    #     producer.send('bitcoin-1', str.encode(message))
-    # except Exception as e:
-    #     print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
-    #     # producer.flush()
-    #     ws.close()
+    try:
+        # pass
+        producer.send('bitcoin-1', str.encode(message))
+    except Exception as e:
+        print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
+        producer.flush()
+        ws.close()
 
 
 

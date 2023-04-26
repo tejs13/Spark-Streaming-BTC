@@ -1,0 +1,13 @@
+gcloud dataproc jobs submit pyspark --cluster cluster-c608 --region us-central1 --jars gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/commons-pool2-2.8.0.jar,gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/kafka-clients-3.2.3.jar,gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/spark-sql-kafka-0-10_2.12-3.2.3.jar,gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/spark-token-provider-kafka-0-10_2.12-3.2.3.jar spark_stream_demo.py
+
+
+
+gcloud dataproc clusters describe cluster-c608 --region us-central1 --format="value(config.softwareConfig.properties.spark.version)"
+
+gcloud dataproc clusters describe cluster-c608 --region us-central1 --format="value(config.endpointConfigs[0].accessConfigs[0].externalIp + ':' + string(config.endpointConfigs[0].accessConfigs[0].ports[0].port))"
+
+
+Working : 
+
+gcloud dataproc jobs submit pyspark --cluster cluster-c608 --region us-central1 --jars gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/commons-pool2-2.8.0.jar,gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/Spark_313_dependencies/kafka-clients-3.1.2.jar,gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/Spark_313_dependencies/spark-sql-kafka-0-10_2.12-3.1.3.jar,gs://dataproc-staging-us-central1-1050341177353-cmhct1kf/Spark_313_dependencies/spark-token-provider-kafka-0-10_2.12-3.1.3.jar dataproc-spark-btc-stream.py
+
