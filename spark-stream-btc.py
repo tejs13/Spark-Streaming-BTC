@@ -8,14 +8,14 @@ import requests
 import websocket
 from websocket import create_connection
 
-findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
-
-
 from pyspark.sql import functions as F
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, explode, from_unixtime, window
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, DateType, ArrayType, \
     LongType
+
+findspark.init('D:\Spark\spark-3.2.3-bin-hadoop3.2')
+
 
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 KAFKA_TOPIC = "bitcoin-1"
@@ -29,7 +29,6 @@ def send_data_to_flask(d):
         print(response.status_code, "Response Code")
     except Exception as e:
         pass
-
 
 cnt = 0
 
@@ -58,7 +57,6 @@ def spark_start_job(conn=None):
         .option("startingOffsets", "latest") \
         .option("group_id", 'btc-group')\
         .load()
-
         # .option("maxOffsetsPerTrigger", "100") \
 
 
@@ -103,8 +101,6 @@ def spark_start_job(conn=None):
 
     # Convert the binary column to a string column and parse the JSON
     parsed_df = df.select(from_json(col("value").cast("string"), schema).alias("data"))
-
-
     # print(parsed_df, "+=================")
 
     df = parsed_df.select('data.*' ,"data.x.*")
@@ -193,27 +189,9 @@ def spark_start_job(conn=None):
 
 
 if __name__ == '__main__':
-
-
     try:
-        # server_socket = socket.socket()
-        # server_socket.bind(('localhost', 7777))
-        # configure how many client the server can listen simultaneously
-        # server_socket.listen(1)
-        # print("Waiting for the CLient COnnection !!!!!!!!!!!!!!1")
-        # conn, address = server_socket.accept()
-        # print(" CLient connected succesfully, iniate spark")
-        # conn.send("tejas".encode())  # send data to the client
-
-
-
-        # print("socket sent")
-        # conn.close()
-
-        # without socket
+        # start the spark spplication
         spark_start_job()
-        # with Sink Socket
-        # spark_start_job(conn)
 
     except BrokenPipeError:
         # server_socket.close()

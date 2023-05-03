@@ -27,11 +27,15 @@ def on_message(ws, message):
     tx = json.loads(message)
     print("========================", cnt, type(message))
 
+    #####################################################
     # write to text file
+    #####################################################
     # w_f.write(json.dumps(tx))
     # w_f.write(",")
 
+    #####################################################
     # write to json file
+    #####################################################
     # json.dump(tx, json_dataset_file, ensure_ascii=False, indent=4)
     # json_dataset_file.write(",")
     cnt += 1
