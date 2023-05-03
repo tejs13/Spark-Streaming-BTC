@@ -2,7 +2,7 @@ import json
 import os
 import traceback
 import pandas
-
+from google.cloud import pubsub_v1
 import findspark
 import requests
 import websocket
@@ -22,6 +22,26 @@ KAFKA_TOPIC = "bitcoin-1"
 
 import socket
 import random
+
+
+
+
+"""
+TO READ FROM GCP PUB SUB CONFIGS 
+"""
+
+# Set up Pub/Sub client and topic name
+project_id = "btc-spark-streaming"
+project_name = "btc-spark-streaming"
+topic_name = "projects/btc-spark-streaming/topics/btc-transactions"
+subscription_name = "projects/btc-spark-streaming/subscriptions/btc-transactions-sub"
+subscriber = pubsub_v1.SubscriberClient()
+topic_path = subscriber.topic_path(project_id, topic_name)
+
+subscription_path = subscriber.subscription_path(project_id, subscription_name)
+subscription_path_abs = "projects/1050341177353/locations/us-central1-a/subscriptions/btc-trans-subscriber"
+
+
 
 def send_data_to_flask(d):
     print("SEND********************** CALLED")
@@ -62,15 +82,40 @@ def spark_start_job(conn=None):
 
 
 
+    # read stream from KAFKA Topics
+    # df = spark.readStream.format("kafka") \
+    #     .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
+    #     .option("subscribe", KAFKA_TOPIC) \
+    #     .option("startingOffsets", "latest") \
+    #     .option("group_id", 'btc-group')\
+    #     .load()
+    #     # .option("maxOffsetsPerTrigger", "100") \
 
-    df = spark.readStream.format("kafka") \
-        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
-        .option("subscribe", KAFKA_TOPIC) \
-        .option("startingOffsets", "latest") \
-        .option("group_id", 'btc-group')\
+    # read stream from
+
+    df = (
+        spark.readStream.format("pubsublite")
+        .option(
+            "pubsublite.subscription",
+            subscription_path_abs,
+        )
         .load()
+    )
 
-        # .option("maxOffsetsPerTrigger", "100") \
+    # The DataFrame should match the fixed Pub/Sub Lite data schema for reading from Pub/Sub Lite: https://github.com/googleapis/java-pubsublite-spark#data-schema
+    # |-- subscription: string
+    # |-- partition: long
+    # |-- offset: long
+    # |-- key: binary
+    # |-- data: binary
+    # |-- publish_timestamp: timestamp
+    # |-- event_timestamp: timestamp
+    # |-- attributes: map
+    # |    |-- key: string
+    # |    |-- value: array
+    # |    |    |-- element: binary
+    df.printSchema()
+
 
 
     # remove NOT required columns from here, just comment out
@@ -113,46 +158,49 @@ def spark_start_job(conn=None):
     ])
 
     # Convert the binary column to a string column and parse the JSON
-    parsed_df = df.select(from_json(col("value").cast("string"), schema).alias("data"))
+    # parsed_df = df.select(from_json(col("value").cast("string"), schema).alias("data"))
 
+    # temp for DataProc Check
+    parsed_df = df.select(from_json(col("data").cast("string"), schema).alias("data"))
+    df = parsed_df
 
     # print(parsed_df, "+=================")
 
-    df = parsed_df.select('data.*' ,"data.x.*")
-    df = df.withColumn("inputs", explode('inputs')).withColumn("out", explode('out'))
-    df = df.select("op", "hash", "lock_time", "ver", "size",
-                   "time", "tx_index", "vin_sz", "vout_sz", "relayed_by",
-
-                   col("inputs.sequence").alias("inputs.sequence"),
-                   col("inputs.prev_out.spent").alias('in_spent'),
-                   col("inputs.prev_out.tx_index").alias('in_tx_index'),
-                   col("inputs.prev_out.type").alias('in_type'),
-                   col("inputs.prev_out.addr").alias('in_addr'),
-                   col("inputs.prev_out.value").alias('in_value'),
-                   col("inputs.prev_out.n").alias('in_n'),
-                   col("inputs.prev_out.script").alias('in_script'),
-                   col("inputs.script").alias("inputs.script"),
-
-                   col("out.spent").alias("out_spent"),
-                   col("out.tx_index").alias("out_tx_index"),
-                   col("out.type").alias("out_type"),
-                   col("out.addr").alias("out_addr"),
-                   col("out.value").alias("out_value"),
-                   col("out.n").alias("out_n"),
-                   col("out.script").alias("out_script"),
-                   )
-    # Transformations and actions
-    # all_cols_df = df.select("hash", "size", "vin_sz", "vout_sz", "in_addr", "in_value", "out_addr", "out_value")
-    windowedCounts = df.groupBy(window(from_unixtime(df['time']), "2 second"), df['hash'], df['in_addr'],
-                                df["in_value"],
-                                df['out_addr'], df["out_value"], df["size"]).count() \
-        .withWatermark("window", "1 second")
-
-    # windowedCounts = windowedCounts.agg(F.count(df['window']).alias("total_trans"))
-    df = windowedCounts.select("window.start", "window.end", '*')  # .drop('window')
-
-    # df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
-    #     .withColumn("in_value", col("in_value") / 100000000)
+    # df = parsed_df.select('data.*' ,"data.x.*")
+    # df = df.withColumn("inputs", explode('inputs')).withColumn("out", explode('out'))
+    # df = df.select("op", "hash", "lock_time", "ver", "size",
+    #                "time", "tx_index", "vin_sz", "vout_sz", "relayed_by",
+    #
+    #                col("inputs.sequence").alias("inputs.sequence"),
+    #                col("inputs.prev_out.spent").alias('in_spent'),
+    #                col("inputs.prev_out.tx_index").alias('in_tx_index'),
+    #                col("inputs.prev_out.type").alias('in_type'),
+    #                col("inputs.prev_out.addr").alias('in_addr'),
+    #                col("inputs.prev_out.value").alias('in_value'),
+    #                col("inputs.prev_out.n").alias('in_n'),
+    #                col("inputs.prev_out.script").alias('in_script'),
+    #                col("inputs.script").alias("inputs.script"),
+    #
+    #                col("out.spent").alias("out_spent"),
+    #                col("out.tx_index").alias("out_tx_index"),
+    #                col("out.type").alias("out_type"),
+    #                col("out.addr").alias("out_addr"),
+    #                col("out.value").alias("out_value"),
+    #                col("out.n").alias("out_n"),
+    #                col("out.script").alias("out_script"),
+    #                )
+    # # Transformations and actions
+    # # all_cols_df = df.select("hash", "size", "vin_sz", "vout_sz", "in_addr", "in_value", "out_addr", "out_value")
+    # windowedCounts = df.groupBy(window(from_unixtime(df['time']), "2 second"), df['hash'], df['in_addr'],
+    #                             df["in_value"],
+    #                             df['out_addr'], df["out_value"], df["size"]).count() \
+    #     .withWatermark("window", "1 second")
+    #
+    # # windowedCounts = windowedCounts.agg(F.count(df['window']).alias("total_trans"))
+    # df = windowedCounts.select("window.start", "window.end", '*')  # .drop('window')
+    #
+    # # df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
+    # #     .withColumn("in_value", col("in_value") / 100000000)
 
 
 
@@ -161,42 +209,42 @@ def spark_start_job(conn=None):
         global cnt
 
         ###################   IN_VALUE AND OUT_VALUE GROUPBY   #######################3
-        in_value_group = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df["size"]).agg(F.first(df['hash']))
-        out_value_group = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df["size"]).agg(F.first(df['hash']))
-        in_values = in_value_group.groupBy(col('hash'), col("size").alias("trans_size")).sum('in_value')
-        out_values = out_value_group.groupBy(col('hash'), col("size")).sum('out_value')
-        df = in_values.join(out_values, in_values['hash'] == out_values['hash'])
-        df = df.withColumn("trans_fees", F.col("sum(in_value)") - F.col("sum(out_value)"))
-
-        df = df.withColumn("trans_fees_2", df["trans_fees"] / df["trans_size"])
-        df = df.withColumn("trans_fees_2", F.bround("trans_fees_2", 2))
-        df = df.filter(F.col("trans_fees_2") >= 0)
-
-        # taking out the average
-        # df = df.select(F.avg("trans_fees_2"))
-        # df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
-        hash_cnt = df.count()
-        df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum'})
-
-        df = df.toPandas()
-        d = df.to_dict('records')
-        d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
-        d[0]["total_hash"] = hash_cnt
-
-        # send to flask
-        send_data_to_flask(d)
+        # in_value_group = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df["size"]).agg(F.first(df['hash']))
+        # out_value_group = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df["size"]).agg(F.first(df['hash']))
+        # in_values = in_value_group.groupBy(col('hash'), col("size").alias("trans_size")).sum('in_value')
+        # out_values = out_value_group.groupBy(col('hash'), col("size")).sum('out_value')
+        # df = in_values.join(out_values, in_values['hash'] == out_values['hash'])
+        # df = df.withColumn("trans_fees", F.col("sum(in_value)") - F.col("sum(out_value)"))
+        #
+        # df = df.withColumn("trans_fees_2", df["trans_fees"] / df["trans_size"])
+        # df = df.withColumn("trans_fees_2", F.bround("trans_fees_2", 2))
+        # df = df.filter(F.col("trans_fees_2") >= 0)
+        #
+        # # taking out the average
+        # # df = df.select(F.avg("trans_fees_2"))
+        # # df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
+        # hash_cnt = df.count()
+        # df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum'})
+        #
+        # df = df.toPandas()
+        # d = df.to_dict('records')
+        # d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
+        # d[0]["total_hash"] = hash_cnt
+        #
+        # # send to flask
+        # send_data_to_flask(d)
 
 
         print(df, "Finally", "========================", cnt, type(df), hash_cnt)
         # print(df.show())
-        df.to_excel('BTC_Transaction_LIVE.xlsx', sheet_name='Sheet1', index=True)
+        # df.to_excel('BTC_Transaction_LIVE.xlsx', sheet_name='Sheet1', index=True)
         cnt += 1
 
 
 
     df.writeStream \
         .format("console") \
-        .outputMode("complete") \
+        .outputMode("append") \
         .foreachBatch(process_each_batch)\
         .start() \
         .awaitTermination()
