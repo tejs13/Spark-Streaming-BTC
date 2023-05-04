@@ -10,6 +10,10 @@ __pycache__/
 .idea/
 node_modules/
 node_modules
+Demonstration Video.mp4
+Demonstration Video/
+Demonstration Video
+.mp4
 
 # Distribution / packaging
 .Python
