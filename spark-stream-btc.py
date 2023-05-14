@@ -21,6 +21,12 @@ KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 KAFKA_TOPIC = "bitcoin-1"
 
 def send_data_to_flask(d):
+    """
+    This method sends the data to Flask via REST API
+    to display on live dashboard
+    :param d:
+    :return:
+    """
     url = 'http://localhost:5001/updateData'
     t_d = {"vol": str(d[0]['sum(sum(out_value))']), "trans_fees": round(d[0]["avg(trans_fees_2)"], 4),
            "total_hash": d[0]["total_hash"]}
@@ -33,7 +39,13 @@ def send_data_to_flask(d):
 cnt = 0
 
 def spark_start_job(conn=None):
+    """
+    Spark Driver Program
+    :param conn:
+    :return:
+    """
 
+    # create sparksession, by providing kafka dependency jars
     spark = SparkSession.builder\
         .config("spark.jars", "///D:/Spark/spark-3.2.3-bin-hadoop3.2/jars/spark-sql-kafka-0-10_2.12-3.2.3.jar" + "," +
                 "///D:/Spark/spark-3.2.3-bin-hadoop3.2/jars/kafka-clients-3.2.3.jar" + "," +
@@ -43,6 +55,7 @@ def spark_start_job(conn=None):
         .getOrCreate()\
         # .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2")
 
+    # setting the logs for spark application
     # Reduce logging
     spark.sparkContext.setLogLevel("WARN")
     spark.sparkContext.setLogLevel("ERROR")
@@ -50,7 +63,7 @@ def spark_start_job(conn=None):
 
 
 
-
+    # consuming raw data from kafka topic, via SPARK readstream interface
     df = spark.readStream.format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP_SERVERS) \
         .option("subscribe", KAFKA_TOPIC) \
@@ -60,7 +73,7 @@ def spark_start_job(conn=None):
         # .option("maxOffsetsPerTrigger", "100") \
 
 
-    # remove NOT required columns from here, just comment out
+    # defining the structure, for coverirting raw data into dataframe
     schema = StructType([
         StructField("op", StringType(), True),
         StructField("x", StructType([
@@ -101,8 +114,6 @@ def spark_start_job(conn=None):
 
     # Convert the binary column to a string column and parse the JSON
     parsed_df = df.select(from_json(col("value").cast("string"), schema).alias("data"))
-    # print(parsed_df, "+=================")
-
     df = parsed_df.select('data.*' ,"data.x.*")
     df = df.withColumn("inputs", explode('inputs')).withColumn("out", explode('out'))
     df = df.select("op", "hash", "lock_time", "ver", "size",
@@ -127,25 +138,17 @@ def spark_start_job(conn=None):
                    col("out.script").alias("out_script"),
                    )
     # Transformations and actions
-    # all_cols_df = df.select("hash", "size", "vin_sz", "vout_sz", "in_addr", "in_value", "out_addr", "out_value")
     windowedCounts = df.groupBy(window(from_unixtime(df['time']), "2 second"), df['hash'], df['in_addr'],
                                 df["in_value"],
                                 df['out_addr'], df["out_value"], df["size"]).count() \
         .withWatermark("window", "1 second")
-
-    # windowedCounts = windowedCounts.agg(F.count(df['window']).alias("total_trans"))
     df = windowedCounts.select("window.start", "window.end", '*')  # .drop('window')
 
-    # df = windowedCounts.withColumn("out_value", col("out_value") / 100000000)\
-    #     .withColumn("in_value", col("in_value") / 100000000)
 
 
-
-
+    # processing each batch, while writing data to the outpus sink
     def process_each_batch(df, batch_id):
         global cnt
-
-        ###################   IN_VALUE AND OUT_VALUE GROUPBY   #######################3
         in_value_group = df.groupBy(df['hash'], df['in_addr'], df['in_value'], df["size"]).agg(F.first(df['hash']))
         out_value_group = df.groupBy(df['hash'], df['out_addr'], df['out_value'], df["size"]).agg(F.first(df['hash']))
         in_values = in_value_group.groupBy(col('hash'), col("size").alias("trans_size")).sum('in_value')
@@ -158,11 +161,8 @@ def spark_start_job(conn=None):
         df = df.filter(F.col("trans_fees_2") >= 0)
 
         # taking out the average
-        # df = df.select(F.avg("trans_fees_2"))
-        # df = df.describe(["sum(in_value)", "sum(out_value)", "trans_fees_2"])
         hash_cnt = df.count()
         df = df.agg({'trans_fees_2': 'avg', 'sum(out_value)': 'sum'})
-
         df = df.toPandas()
         d = df.to_dict('records')
         d[0]["sum(sum(out_value))"] = d[0]["sum(sum(out_value))"] / 100000000
@@ -170,7 +170,6 @@ def spark_start_job(conn=None):
 
         # send to flask
         send_data_to_flask(d)
-
 
         print(df, "Finally", "========================", cnt, type(df), hash_cnt)
         # print(df.show())

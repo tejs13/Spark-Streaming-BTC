@@ -11,6 +11,8 @@ json_dataset_file = open('BTC_Dataset_April_2.json', 'w', encoding='utf-8')
 cnt = 0
 dataset = []
 
+
+# creating kafka producer, to write on topic the bitcoin transaction
 while True:
     try:
         producer = KafkaProducer(bootstrap_servers='localhost:9092', api_version=(3, 2, 3))
@@ -40,11 +42,11 @@ def on_message(ws, message):
     # json_dataset_file.write(",")
     cnt += 1
 
-    # send BTC trnsaction to KAFKA, KAFKA active
+    # send BTC trnsaction to KAFKA on new topic
     try:
+
         producer.send('bitcoin-1', str.encode(message))
     except Exception as e:
-        print(str(e), "PRODUCER EXCEPTION !!!!!!!!!!!!!!!!!!!!!!!!%%%%%%%%%%%%%%%%%%%%%%%%%")
         producer.flush()
         ws.close()
 def on_open(ws):
